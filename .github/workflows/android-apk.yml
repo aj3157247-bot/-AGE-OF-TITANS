@@ -20,58 +20,56 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Android SDK
+      - name: Setup Android
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK
         run: |
           yes | sdkmanager --licenses > /dev/null || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Setup Godot with Android export templates
+      - name: Setup Godot with Android templates
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.3.0
-          use-dotnet: false
           include-templates: true
 
-      - name: Prepare project for export
+      - name: Fix export preset for Godot 4.3
+        shell: bash
         run: |
-          # The repository contains an older nested Godot copy under godot/.
-          # Export from the real root project only.
-          test -f project.godot
-          test -f scenes/Main.tscn
-          test -f scripts/main.gd
-
-          # The root project is self-contained and draws its visuals procedurally.
-          # Remove references to optional icon files that are not present in this repository.
-          sed -i '/^config\/icon=/d' project.godot
-          sed -i '/^launcher_icons\//d' export_presets.cfg
-
-          # Godot 4.3 expects these export filter keys in each preset.
-          python3 - <<'PY2'
+          python3 - <<'PY'
 from pathlib import Path
+
 p = Path("export_presets.cfg")
 s = p.read_text()
-if 'export_filter=' not in s:
-    s = s.replace('[preset.0]\n', '[preset.0]\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n', 1)
-p.write_text(s)
-PY2
 
-      - name: Verify Godot and templates
+if "[preset.0]" in s:
+    block_start = s.index("[preset.0]")
+    next_preset = s.find("\n[preset.", block_start + 1)
+    if next_preset == -1:
+        next_preset = len(s)
+    block = s[block_start:next_preset]
+    if "export_filter=" not in block:
+        block = block.replace(
+            "[preset.0]\n",
+            '[preset.0]\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n',
+            1
+        )
+        s = s[:block_start] + block + s[next_preset:]
+
+p.write_text(s)
+PY
+
+      - name: Verify Godot
         run: |
           godot --version
-          ls -la "$HOME/.local/share/godot/export_templates/4.3.stable" || true
+          test -f export_presets.cfg
 
-      - name: Export Android APK
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+      - name: Export APK
         run: |
           mkdir -p build
           godot --headless --path . --editor --quit
           godot --headless --path . --export-debug "Android" build/AGE-OF-TITANS.apk
-          test -f build/AGE-OF-TITANS.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
