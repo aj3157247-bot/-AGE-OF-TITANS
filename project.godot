@@ -1,0 +1,29 @@
+; AGE OF TITANS - Android-ready Godot 4 project
+; Open this folder directly in Godot 4.x.
+config_version=5
+
+[application]
+config/name="AGE OF TITANS"
+config/description="Online fantasy strategy game: build, recruit, raid and conquer."
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.3", "GL Compatibility")
+config/icon="res://assets/icon.svg"
+boot_splash/bg_color=Color(0.82,0.88,0.78,1)
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/window_width_override=1280
+window/size/window_height_override=720
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+environment/defaults/default_clear_color=Color(0.82,0.88,0.78,1)
+
+[gui]
+theme/default_font_multichannel_signed_distance_field=true
+
+[android]
+permissions/internet=true
