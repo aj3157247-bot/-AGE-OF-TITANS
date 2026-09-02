@@ -3,13 +3,11 @@ name: AGE OF TITANS - Android APK
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
   build-apk:
     runs-on: ubuntu-22.04
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,52 +18,50 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Setup Android
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK
+      - name: Install Android SDK packages
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
+          yes | sdkmanager --licenses >/dev/null || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Setup Godot with Android templates
-        uses: chickensoft-games/setup-godot@v2
-        with:
-          version: 4.3.0
-          include-templates: true
+      - name: Install Godot 4.3 and Android templates
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_linux.x86_64.zip -O /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+          sudo mv /tmp/godot/Godot_v4.3-stable_linux.x86_64 /usr/local/bin/godot
+          sudo chmod +x /usr/local/bin/godot
+          mkdir -p ~/.local/share/godot/export_templates/4.3.stable
+          wget -q https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz -O /tmp/templates.tpz
+          mkdir -p /tmp/templates
+          unzip -q /tmp/templates.tpz -d /tmp/templates
+          cp -r /tmp/templates/templates/* ~/.local/share/godot/export_templates/4.3.stable/
+          godot --version
 
-      - name: Fix export preset for Godot 4.3
+      - name: Fix export preset
         shell: bash
         run: |
           python3 - <<'PY'
-from pathlib import Path
-
-p = Path("export_presets.cfg")
-s = p.read_text()
-
-if "[preset.0]" in s:
-    block_start = s.index("[preset.0]")
-    next_preset = s.find("\n[preset.", block_start + 1)
-    if next_preset == -1:
-        next_preset = len(s)
-    block = s[block_start:next_preset]
-    if "export_filter=" not in block:
-        block = block.replace(
-            "[preset.0]\n",
-            '[preset.0]\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n',
-            1
-        )
-        s = s[:block_start] + block + s[next_preset:]
-
-p.write_text(s)
-PY
-
-      - name: Verify Godot
-        run: |
-          godot --version
-          test -f export_presets.cfg
+          from pathlib import Path
+          p = Path("export_presets.cfg")
+          s = p.read_text()
+          if "[preset.0]" in s:
+              start = s.index("[preset.0]")
+              end = s.find("\n[preset.", start + 1)
+              if end == -1:
+                  end = len(s)
+              block = s[start:end]
+              if "export_filter=" not in block:
+                  block = block.replace("[preset.0]\n", '[preset.0]\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n', 1)
+                  s = s[:start] + block + s[end:]
+          p.write_text(s)
+          PY
 
       - name: Export APK
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
         run: |
           mkdir -p build
           godot --headless --path . --editor --quit
