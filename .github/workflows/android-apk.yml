@@ -28,20 +28,42 @@ jobs:
           yes | sdkmanager --licenses > /dev/null || true
           sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Setup Godot
+      - name: Setup Godot with Android export templates
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.3.0
           use-dotnet: false
+          include-templates: true
 
-      - name: Install Godot export templates
+      - name: Prepare project for export
         run: |
-          mkdir -p ~/.local/share/godot/export_templates/4.3.0
-          curl -L -o /tmp/templates.tpz             https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz
-          unzip -q /tmp/templates.tpz -d /tmp/godot-templates
-          cp -r /tmp/godot-templates/templates/* ~/.local/share/godot/export_templates/4.3.0/
+          # The repository contains an older nested Godot copy under godot/.
+          # Export from the real root project only.
+          test -f project.godot
+          test -f scenes/Main.tscn
+          test -f scripts/main.gd
 
-      - name: Export APK
+          # The root project is self-contained and draws its visuals procedurally.
+          # Remove references to optional icon files that are not present in this repository.
+          sed -i '/^config\/icon=/d' project.godot
+          sed -i '/^launcher_icons\//d' export_presets.cfg
+
+          # Godot 4.3 expects these export filter keys in each preset.
+          python3 - <<'PY2'
+from pathlib import Path
+p = Path("export_presets.cfg")
+s = p.read_text()
+if 'export_filter=' not in s:
+    s = s.replace('[preset.0]\n', '[preset.0]\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n', 1)
+p.write_text(s)
+PY2
+
+      - name: Verify Godot and templates
+        run: |
+          godot --version
+          ls -la "$HOME/.local/share/godot/export_templates/4.3.stable" || true
+
+      - name: Export Android APK
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
@@ -49,6 +71,7 @@ jobs:
           mkdir -p build
           godot --headless --path . --editor --quit
           godot --headless --path . --export-debug "Android" build/AGE-OF-TITANS.apk
+          test -f build/AGE-OF-TITANS.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
