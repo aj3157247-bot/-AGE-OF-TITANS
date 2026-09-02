@@ -24,12 +24,16 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK packages
+        shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" \
-  "cmdline-tools;latest" \
-  "cmake;3.10.2.4988404" \
-  "ndk;23.2.8568313"
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "cmdline-tools;latest" \
+            "cmake;3.10.2.4988404" \
+            "ndk;23.2.8568313"
 
       - name: Setup Godot 4.3 with Android templates
         uses: chickensoft-games/setup-godot@v2
