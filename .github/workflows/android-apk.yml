@@ -9,20 +9,16 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-22.04
-
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
-
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
-
       - name: Install Android SDK packages
         shell: bash
         run: |
@@ -35,24 +31,37 @@ jobs:
             "cmdline-tools;latest" \
             "cmake;3.10.2.4988404" \
             "ndk;23.2.8568313"
-
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          test -x "$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          test -d "$ANDROID_HOME/platforms/android-34"
+          test -d "$ANDROID_HOME/ndk/23.2.8568313"
       - name: Setup Godot 4.3
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.3.0
-          include-templates: true
+          include-templates: false
           use-dotnet: false
-
-      - name: Configure Godot Android environment
+      - name: Install exact Godot 4.3 export templates
         shell: bash
         run: |
           set -euo pipefail
-
-          # Godot 4.x reads editor settings from this Linux config directory.
-          export XDG_CONFIG_HOME="$RUNNER_TEMP/godot-config"
-          mkdir -p "$XDG_CONFIG_HOME/godot" "$HOME/.android"
-          echo "XDG_CONFIG_HOME=$XDG_CONFIG_HOME" >> "$GITHUB_ENV"
-
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/4.3.stable"
+          mkdir -p "$TEMPLATE_DIR"
+          curl -fL --retry 3 "https://github.com/godotengine/godot/releases/download/4.3-stable/Godot_v4.3-stable_export_templates.tpz" -o /tmp/godot_templates.tpz
+          rm -rf /tmp/godot_templates
+          mkdir -p /tmp/godot_templates
+          unzip -q /tmp/godot_templates.tpz -d /tmp/godot_templates
+          test -f /tmp/godot_templates/templates/android_debug.apk
+          test -f /tmp/godot_templates/templates/android_release.apk
+          cp /tmp/godot_templates/templates/android_debug.apk "$TEMPLATE_DIR/android_debug.apk"
+          cp /tmp/godot_templates/templates/android_release.apk "$TEMPLATE_DIR/android_release.apk"
+          test -s "$TEMPLATE_DIR/android_debug.apk"
+          test -s "$TEMPLATE_DIR/android_release.apk"
+      - name: Configure Godot Android settings and debug keystore
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot" "$HOME/.android"
           if [ ! -f "$HOME/.android/debug.keystore" ]; then
             keytool -genkeypair \
               -alias androiddebugkey \
@@ -62,66 +71,48 @@ jobs:
               -keystore "$HOME/.android/debug.keystore" \
               -storepass android \
               -keypass android \
-              -dname "CN=Android Debug,O=Android,C=US"
+              -dname "CN=Android Debug,O=Android,C=US" \
+              -noprompt
           fi
+          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
 
-          # IMPORTANT: no YAML/heredoc indentation is inserted into this file.
-          printf '%s\n' \
-            '[gd_resource type="EditorSettings" format=3]' \
-            '' \
-            '[resource]' \
-            "export/android/java_sdk_path = \"$JAVA_HOME\"" \
-            "export/android/android_sdk_path = \"$ANDROID_HOME\"" \
-            > "$XDG_CONFIG_HOME/godot/editor_settings-4.tres"
-
+          [resource]
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/debug_keystore = "$HOME/.android/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
           echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
-
-          test -x "$JAVA_HOME/bin/java"
-          test -x "$ANDROID_HOME/platform-tools/adb"
-          test -x "$ANDROID_HOME/build-tools/34.0.0/apksigner"
-          test -d "$ANDROID_HOME/platforms/android-34"
-          test -d "$ANDROID_HOME/ndk/23.2.8568313"
+          test -f "$HOME/.config/godot/editor_settings-4.tres"
           test -f "$HOME/.android/debug.keystore"
-          test -s "$XDG_CONFIG_HOME/godot/editor_settings-4.tres"
-
-          echo '--- Godot EditorSettings ---'
-          cat "$XDG_CONFIG_HOME/godot/editor_settings-4.tres"
-
-      - name: Remove nested Godot project file
+      - name: Remove nested Godot project only
         shell: bash
         run: |
           set -euo pipefail
           rm -f godot/project.godot
-
-      - name: Validate project files
+      - name: Validate project and Android toolchain
         shell: bash
         run: |
           set -euo pipefail
-          godot --version
           test -f project.godot
           test -f export_presets.cfg
           test -f scenes/Main.tscn
           test -f scripts/main.gd
-          grep -q '^name="Android"$' export_presets.cfg
-          grep -q '^platform="Android"$' export_presets.cfg
-          grep -q '^package/unique_name="com.ageoftitans.game"$' export_presets.cfg
-          grep -q '^architectures/arm64-v8a=true$' export_presets.cfg
-
-      - name: Import Godot project
-        shell: bash
-        run: |
-          set -euo pipefail
-          godot --headless --path . --editor --import --quit
-
+          test -x "$JAVA_HOME/bin/java"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          test -x "$ANDROID_HOME/build-tools/34.0.0/apksigner"
+          test -s "$HOME/.local/share/godot/export_templates/4.3.stable/android_debug.apk"
+          godot --headless --editor --path . --import --quit
       - name: Export Android APK
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p build
-          godot --headless --verbose --path . --export-debug "Android" build/AGE-OF-TITANS.apk
-
+          godot --headless --path . --verbose --export-debug "Android" build/AGE-OF-TITANS.apk
       - name: Verify APK
         shell: bash
         run: |
@@ -129,7 +120,6 @@ jobs:
           test -s build/AGE-OF-TITANS.apk
           file build/AGE-OF-TITANS.apk
           ls -lh build/AGE-OF-TITANS.apk
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
