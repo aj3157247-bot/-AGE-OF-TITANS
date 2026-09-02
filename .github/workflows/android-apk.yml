@@ -24,9 +24,17 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK packages
+        shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "cmdline-tools;latest" \
+            "cmake;3.10.2.4988404" \
+            "ndk;23.2.8568313"
 
       - name: Setup Godot 4.3 with Android templates
         uses: chickensoft-games/setup-godot@v2
@@ -34,44 +42,13 @@ jobs:
           version: 4.3.0
           include-templates: true
 
-      - name: Prepare clean Android export configuration
+      - name: Remove nested Godot project
         shell: bash
         run: |
-          # The repository contains an older nested Godot project.
-          # The real project is the project.godot at repository root.
           rm -rf godot
 
-          # The root project references an icon that is not present.
-          sed -i '/^config\/icon=/d' project.godot
-
-          # Create a clean Godot 4.3 Android export preset.
-          cat > export_presets.cfg <<'EOF'
-[preset.0]
-name="Android"
-platform="Android"
-runnable=true
-dedicated_server=false
-custom_features=""
-export_filter="all_resources"
-include_filter=""
-exclude_filter=""
-patch_list=PackedStringArray()
-
-[preset.0.options]
-custom_template/debug=""
-custom_template/release=""
-binary_format/architecture="arm64-v8a"
-binary_format/architecture/armeabi-v7a=true
-package/unique_name="com.ageoftitans.game"
-package/name="AGE OF TITANS"
-package/signed=false
-version/code=1
-version/name="0.1.0"
-screen/handheld/orientation=1
-permissions/internet=true
-EOF
-
       - name: Check Godot project
+        shell: bash
         run: |
           godot --version
           test -f project.godot
@@ -83,8 +60,24 @@ EOF
         shell: bash
         run: |
           mkdir -p build
-          godot --headless --path . --editor --quit
-          godot --headless --path . --export-debug "Android" build/AGE-OF-TITANS.apk
+
+          godot \
+            --headless \
+            --path . \
+            --editor \
+            --quit
+
+          godot \
+            --headless \
+            --path . \
+            --export-debug "Android" \
+            build/AGE-OF-TITANS.apk
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          test -f build/AGE-OF-TITANS.apk
+          ls -lh build/AGE-OF-TITANS.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
