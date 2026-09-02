@@ -27,53 +27,64 @@ jobs:
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "cmdline-tools;latest" \
-            "cmake;3.10.2.4988404" \
-            "ndk;23.2.8568313"
+          sdkmanager             "platform-tools"             "platforms;android-34"             "build-tools;34.0.0"             "cmdline-tools;latest"             "cmake;3.10.2.4988404"             "ndk;23.2.8568313"
 
       - name: Setup Godot 4.3 with Android templates
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.3.0
-          use-dotnet: false
           include-templates: true
+          use-dotnet: false
 
-      - name: Configure Android environment
+      - name: Prepare Android export
         shell: bash
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
-          adb start-server
-          adb devices
-
-      - name: Prepare clean Android export configuration
-        shell: bash
-        run: |
-          # The repository contains an older nested Godot project.
-          # The real project is the project.godot at repository root.
+          # Use the project at repository root.
           rm -rf godot
 
-          # The root project references an icon that is not present.
+          # The icon is not present in the root project.
           sed -i '/^config\/icon=/d' project.godot
 
+          mkdir -p .ci
+
+          # Tell Godot explicitly where Java and Android SDK are installed.
+          cat > .ci/editor_settings.cfg <<EOF
+          [application]
+
+          config/name="AGE OF TITANS"
+
+          [export]
+
+          [export/android]
+
+          android_sdk_path="$ANDROID_HOME"
+          java_sdk_path="$JAVA_HOME"
+          adb="$ANDROID_HOME/platform-tools/adb"
+          EOF
+
       - name: Check Godot project
+        shell: bash
         run: |
           godot --version
           test -f project.godot
           test -f scenes/Main.tscn
           test -f scripts/main.gd
           test -f export_presets.cfg
+          test -x "$ANDROID_HOME/platform-tools/adb"
 
       - name: Export Android APK
         shell: bash
         run: |
           mkdir -p build
-          godot --headless --path . --editor --quit
-          godot --headless --path . --export-debug "Android" build/AGE-OF-TITANS.apk
+          "$ANDROID_HOME/platform-tools/adb" start-server || true
+          godot --headless --editor-settings .ci/editor_settings.cfg --path . --editor --quit
+          godot --headless --editor-settings .ci/editor_settings.cfg --path . --export-debug "Android" build/AGE-OF-TITANS.apk
+
+      - name: Verify APK
+        shell: bash
+        run: |
+          test -f build/AGE-OF-TITANS.apk
+          ls -lh build/AGE-OF-TITANS.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
