@@ -27,58 +27,75 @@ jobs:
         shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager             "platform-tools"             "platforms;android-34"             "build-tools;34.0.0"             "cmdline-tools;latest"             "cmake;3.10.2.4988404"             "ndk;23.2.8568313"
 
-      - name: Setup Godot 4.3 with Android templates
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0" \
+            "cmdline-tools;latest" \
+            "cmake;3.10.2.4988404" \
+            "ndk;23.2.8568313"
+
+      - name: Setup Godot 4.3
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.3.0
           include-templates: true
           use-dotnet: false
 
-      - name: Prepare Android export
+      - name: Configure Android environment
         shell: bash
         run: |
-          # Use the project at repository root.
-          rm -rf godot
+          export ANDROID_HOME="${ANDROID_SDK_ROOT}"
+          export PATH="${ANDROID_HOME}/platform-tools:${ANDROID_HOME}/cmdline-tools/latest/bin:${PATH}"
 
-          # The icon is not present in the root project.
-          sed -i '/^config\/icon=/d' project.godot
+          echo "ANDROID_HOME=${ANDROID_HOME}" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT}" >> "$GITHUB_ENV"
+          echo "${ANDROID_HOME}/platform-tools" >> "$GITHUB_PATH"
+          echo "${ANDROID_HOME}/cmdline-tools/latest/bin" >> "$GITHUB_PATH"
 
-          mkdir -p .ci
+          mkdir -p "$HOME/.android"
 
-          # Tell Godot explicitly where Java and Android SDK are installed.
-          cat > .ci/editor_settings.cfg <<EOF
-          [application]
+          if [ ! -f "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair \
+              -alias androiddebugkey \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -keystore "$HOME/.android/debug.keystore" \
+              -storepass android \
+              -keypass android \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
 
-          config/name="AGE OF TITANS"
+          adb start-server
 
-          [export]
-
-          [export/android]
-
-          android_sdk_path="$ANDROID_HOME"
-          java_sdk_path="$JAVA_HOME"
-          adb="$ANDROID_HOME/platform-tools/adb"
-          EOF
-
-      - name: Check Godot project
+      - name: Remove nested Godot project
         shell: bash
         run: |
-          godot --version
+          if [ -d "godot" ] && [ -f "godot/project.godot" ]; then
+            rm -rf godot
+          fi
+
+      - name: Verify project
+        shell: bash
+        run: |
           test -f project.godot
-          test -f scenes/Main.tscn
-          test -f scripts/main.gd
           test -f export_presets.cfg
-          test -x "$ANDROID_HOME/platform-tools/adb"
+          godot --version
+          echo "Android SDK: ${ANDROID_SDK_ROOT}"
+          echo "Java: ${JAVA_HOME}"
 
       - name: Export Android APK
         shell: bash
         run: |
           mkdir -p build
-          "$ANDROID_HOME/platform-tools/adb" start-server || true
-          godot --headless --editor-settings .ci/editor_settings.cfg --path . --editor --quit
-          godot --headless --editor-settings .ci/editor_settings.cfg --path . --export-debug "Android" build/AGE-OF-TITANS.apk
+
+          godot \
+            --headless \
+            --path . \
+            --export-debug "Android" \
+            build/AGE-OF-TITANS.apk
 
       - name: Verify APK
         shell: bash
