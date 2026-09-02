@@ -50,7 +50,7 @@ jobs:
           # export_presets.cfg. Godot 4.3 expects an EditorSettings resource.
           mkdir -p "$HOME/.config/godot"
 
-          cat > "$HOME/.config/godot/editor_settings-4.tres" <<EOF2
+          cat > "$HOME/.config/godot/editor_settings-4.3.tres" <<EOF2
           [gd_resource type="EditorSettings" format=3]
 
           [resource]
@@ -81,7 +81,7 @@ jobs:
           test -f "$ANDROID_HOME/build-tools/34.0.0/apksigner"
           test -d "$ANDROID_HOME/ndk/23.2.8568313"
           test -f "$HOME/.android/debug.keystore"
-          cat "$HOME/.config/godot/editor_settings-4.tres"
+          cat "$HOME/.config/godot/editor_settings-4.3.tres"
 
       - name: Remove nested Godot project
         shell: bash
