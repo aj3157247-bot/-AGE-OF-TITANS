@@ -24,31 +24,28 @@ jobs:
         uses: android-actions/setup-android@v3
 
       - name: Install Android SDK packages
-        shell: bash
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-
-          sdkmanager \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0" \
-            "cmdline-tools;latest" \
-            "cmake;3.10.2.4988404" \
-            "ndk;23.2.8568313"
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
 
       - name: Setup Godot 4.3 with Android templates
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.3.0
+          use-dotnet: false
           include-templates: true
 
-      - name: Remove nested Godot project
+      - name: Prepare clean Android export configuration
         shell: bash
         run: |
+          # The repository contains an older nested Godot project.
+          # The real project is the project.godot at repository root.
           rm -rf godot
 
+          # The root project references an icon that is not present.
+          sed -i '/^config\/icon=/d' project.godot
+
       - name: Check Godot project
-        shell: bash
         run: |
           godot --version
           test -f project.godot
@@ -60,24 +57,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p build
-
-          godot \
-            --headless \
-            --path . \
-            --editor \
-            --quit
-
-          godot \
-            --headless \
-            --path . \
-            --export-debug "Android" \
-            build/AGE-OF-TITANS.apk
-
-      - name: Verify APK
-        shell: bash
-        run: |
-          test -f build/AGE-OF-TITANS.apk
-          ls -lh build/AGE-OF-TITANS.apk
+          godot --headless --path . --editor --quit
+          godot --headless --path . --export-debug "Android" build/AGE-OF-TITANS.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
