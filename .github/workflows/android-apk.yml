@@ -26,7 +26,10 @@ jobs:
       - name: Install Android SDK packages
         run: |
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" \
+  "cmdline-tools;latest" \
+  "cmake;3.10.2.4988404" \
+  "ndk;23.2.8568313"
 
       - name: Setup Godot 4.3 with Android templates
         uses: chickensoft-games/setup-godot@v2
@@ -34,6 +37,14 @@ jobs:
           version: 4.3.0
           use-dotnet: false
           include-templates: true
+
+      - name: Configure Android environment
+        shell: bash
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> "$GITHUB_ENV"
+          adb start-server
+          adb devices
 
       - name: Prepare clean Android export configuration
         shell: bash
